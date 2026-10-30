@@ -51,15 +51,8 @@ folder is read-only it uses `%LOCALAPPDATA%\SniPin`.
 
 ## Download
 
-Grab the latest **`SniPin-<version>-win-x64.zip`** from the *Releases* page and extract
-`SniPin.exe` anywhere you like — it is a single self-contained file.
-
-The build is **not code-signed**, so the first run of a downloaded copy shows *"Windows protected
-your PC"*: choose **More info → Run anyway**. Verify the download instead of trusting it:
-
-```powershell
-Get-FileHash .\SniPin-<version>-win-x64.zip -Algorithm SHA256
-Get-Content .\SniPin-<version>-win-x64.zip.sha256
+```
+https://github.com/CyanceC/Snipin/releases
 ```
 
 Windows 10/11 x64.
