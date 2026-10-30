@@ -4,8 +4,7 @@ A small Windows snipping tool that puts **WebP on the clipboard by default** —
 pasteable straight into anything that accepts a dropped file (Chromium, Slack, Discord, Explorer…),
 while apps that only understand bitmaps still get a normal image.
 
-One executable, no installer, no .NET, no DLLs, no runtime to install. The same exe is both the
-tray/hotkey resident and the short-lived capture worker.
+One executable, no installer, no .NET, no DLLs, no runtime to install. In one exe to rule them all.
 
 ## Why
 
