@@ -1,0 +1,48 @@
+SniPin — third-party notices
+============================
+
+SniPin itself is MIT-licensed (see LICENSE). The following third-party component is compiled into
+the executable; its licence applies to that component, not to SniPin's own source.
+
+1. libwebp and libsharpyuv 1.6.0 — BSD 3-Clause
+   https://chromium.googlesource.com/webm/libwebp
+   Vendored as static libraries: native\win-x64\static\libwebp.lib and libsharpyuv.lib,
+   headers in native\win-x64\include\webp\.
+
+   Copyright (c) 2010, Google Inc. All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are
+   met:
+
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in
+       the documentation and/or other materials provided with the
+       distribution.
+     * Neither the name of Google nor the names of its contributors may
+       be used to endorse or promote products derived from this software
+       without specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+   HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Notices
+-------
+
+* The Visual C++ runtime is linked statically by the build (/MT); no Microsoft redistributable
+  is shipped with SniPin.
+* The icon is original artwork made for this project and is covered by the same MIT licence.
+* Segoe UI / Segoe Fluent Icons / Segoe MDL2 Assets are Windows system fonts used at runtime;
+  they are not redistributed.
+* No .NET, no Electron, no Qt, no third-party UI toolkit is used — only the Windows SDK.

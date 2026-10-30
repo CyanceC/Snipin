@@ -1,0 +1,8 @@
+# build output (the example build kept in build/ is the only exception)
+build/*
+!build/SniPin.exe
+out/
+*.user
+*.suo
+.vs/
+CMakeUserPresets.json

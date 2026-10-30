@@ -1,0 +1,83 @@
+#include <windows.h>
+#include "resource.h"
+
+1 ICON "app.ico"
+
+1 24 "app.manifest"
+
+IDD_SETTINGS DIALOGEX 0, 0, 330, 252
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SniPin Settings"
+FONT 9, "Segoe UI", 400, 0, 0x0
+BEGIN
+    GROUPBOX        "Capture", -1, 7, 7, 316, 46
+    LTEXT           "Hotkey:", -1, 14, 21, 40, 9
+    EDITTEXT        IDC_HOTKEY, 58, 19, 110, 13, ES_READONLY | ES_CENTER
+    LTEXT           "Click the field, then press the shortcut you want.", -1, 58, 34, 240, 9
+
+    GROUPBOX        "Clipboard", -1, 7, 57, 316, 52
+    LTEXT           "Mode:", -1, 14, 71, 30, 9
+    COMBOBOX        IDC_MODE, 48, 69, 80, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Quality:", -1, 140, 71, 32, 9
+    EDITTEXT        IDC_QUALITY, 176, 69, 28, 13, ES_NUMBER
+    CONTROL         "", IDC_QUALITY_SPIN, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS, 204, 69, 10, 13
+    CONTROL         "Copy right after the capture", IDC_AUTOCOPY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 89, 150, 10
+    LTEXT           "100 = lossless", -1, 236, 71, 80, 9
+
+    GROUPBOX        "Saving", -1, 7, 113, 316, 40
+    LTEXT           "Format:", -1, 14, 128, 30, 9
+    COMBOBOX        IDC_FORMAT, 48, 126, 60, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Folder:", -1, 118, 128, 30, 9
+    EDITTEXT        IDC_FOLDER, 152, 126, 74, 13
+    PUSHBUTTON      "Browse...", IDC_BROWSE, 230, 126, 40, 13
+    PUSHBUTTON      "Open", IDC_OPENFOLDER, 274, 126, 42, 13
+
+    GROUPBOX        "Pin and tools", -1, 7, 157, 316, 52
+    LTEXT           "Offset:", -1, 14, 171, 30, 9
+    EDITTEXT        IDC_OFFSET, 48, 169, 28, 13, ES_NUMBER
+    CONTROL         "", IDC_OFFSET_SPIN, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS, 76, 169, 10, 13
+    LTEXT           "Pen:", -1, 100, 171, 20, 9
+    EDITTEXT        IDC_PEN, 122, 169, 24, 13, ES_NUMBER
+    CONTROL         "", IDC_PEN_SPIN, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS, 146, 169, 10, 13
+    LTEXT           "Marker:", -1, 168, 171, 32, 9
+    EDITTEXT        IDC_MARKER, 202, 169, 24, 13, ES_NUMBER
+    CONTROL         "", IDC_MARKER_SPIN, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS, 226, 169, 10, 13
+    LTEXT           "Text:", -1, 248, 171, 22, 9
+    EDITTEXT        IDC_TEXTSIZE, 272, 169, 24, 13, ES_NUMBER
+    CONTROL         "", IDC_TEXTSIZE_SPIN, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS, 296, 169, 10, 13
+    CONTROL         "Keep the pin above other windows", IDC_ONTOP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 189, 170, 10
+
+    CONTROL         "Start SniPin with Windows", IDC_AUTOSTART, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 214, 160, 10
+
+    DEFPUSHBUTTON   "OK", IDOK, 200, 230, 55, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 260, 230, 55, 16
+    PUSHBUTTON      "Defaults", IDC_RESET, 7, 230, 60, 16
+END
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 0,2,15,0
+PRODUCTVERSION 0,2,15,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "SniPin"
+            VALUE "FileVersion", "0.2.15"
+            VALUE "InternalName", "SniPin"
+            VALUE "OriginalFilename", "SniPin.exe"
+            VALUE "ProductName", "SniPin"
+            VALUE "ProductVersion", "0.2.15"
+            VALUE "LegalCopyright", "Copyright (c) 2026 Kirt"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
