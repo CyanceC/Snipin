@@ -23,6 +23,15 @@ std::vector<Point> ToPoints(const std::vector<POINT>& source) {
     return points;
 }
 
+// GDI leaves the alpha byte of a screen BitBlt undefined (often 0). WebP would then encode a
+// transparent image with an extra alpha plane, so every pixel is forced opaque.
+void ForceOpaque(Dib& dib) {
+    for (int row = 0; row < dib.height; ++row) {
+        auto* pixel = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(dib.pixels) + static_cast<size_t>(row) * dib.stride);
+        for (int x = 0; x < dib.width; ++x) pixel[x] |= 0xFF000000u;
+    }
+}
+
 } // namespace
 
 bool Document::CropFrom(const Dib& source, int x, int y, int width, int height) {
@@ -35,6 +44,7 @@ bool Document::CropFrom(const Dib& source, int x, int y, int width, int height) 
         uint8_t* to = static_cast<uint8_t*>(image.pixels) + static_cast<size_t>(row) * image.stride;
         memcpy(to, from, static_cast<size_t>(width) * 4);
     }
+    ForceOpaque(image);
     shapes.clear();
     return true;
 }
@@ -176,6 +186,8 @@ Dib Document::Flatten() const {
         graphics.SetCompositingMode(CompositingModeSourceOver);
         DrawShapes(graphics);
         graphics.Flush();
+        GdiFlush();
+        ForceOpaque(result);
     }
     return result;
 }

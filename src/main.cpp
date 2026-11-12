@@ -41,7 +41,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
     if (argv != nullptr) LocalFree(argv);
 
     if (version) {
-        MessageBoxW(nullptr, L"SniPin 0.2.15\nOne exe, two roles.\n\nSniPin.exe        resident (tray)\n--capture          capture worker\n--snip             ask the resident to snip\n--settings         open settings\n--quit             stop the resident", L"SniPin", MB_OK | MB_ICONINFORMATION);
+        MessageBoxW(nullptr, L"SniPin 0.2.16\nOne exe, two roles.\n\nSniPin.exe        resident (tray)\n--capture          capture worker\n--snip             ask the resident to snip\n--settings         open settings\n--quit             stop the resident", L"SniPin", MB_OK | MB_ICONINFORMATION);
         return 0;
     }
 

@@ -10,6 +10,7 @@
 #include <gdiplus.h>
 #include <commdlg.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <string>
 #include <thread>
@@ -115,11 +116,14 @@ struct Pin {
 
     HWND editor = nullptr;
     WNDPROC editorProc = nullptr;
+    HFONT editorFont = nullptr;
+    HFONT hexFont = nullptr;
     bool committing = false;
 
     Dib back;
     bool busy = false;
     bool pendingCopy = false;
+    std::wstring lastDrop; // temp .webp of this pin's latest copy, deleted once superseded
     std::wstring toast;
     ULONGLONG toastUntil = 0;
 
@@ -289,7 +293,27 @@ struct CopyJob {
     Settings settings;
     HWND window = nullptr;
     std::wstring dropPath;
+    std::wstring previousDrop;
+    unsigned long long sequence = 0;
 };
+
+// Copies run on background threads. The worker must not exit (and shut GDI+ down) while one is
+// still encoding, so the last pin to close only quits once the in-flight count reaches zero.
+DWORD g_uiThread = 0;
+std::atomic<int> g_copiesInFlight{0};
+std::atomic<bool> g_quitWhenIdle{false};
+
+// Publishing is serialised and ordered: a copy that finishes after a newer one has already reached
+// the clipboard (another pin, or the final copy of a closing pin) is dropped instead of
+// overwriting it.
+SRWLOCK g_publishLock = SRWLOCK_INIT;
+unsigned long long g_nextSequence = 0;  // UI thread only
+unsigned long long g_publishedSequence = 0; // guarded by g_publishLock
+
+void QuitWhenIdle() {
+    g_quitWhenIdle = true;
+    if (g_copiesInFlight == 0) PostQuitMessage(0);
+}
 
 void StartCopy(Pin& pin);
 
@@ -300,6 +324,62 @@ void CopyFinished(Pin& pin, bool ok) {
         pin.pendingCopy = false;
         StartCopy(pin);
     }
+}
+
+void RunCopyJob(CopyJob* job) {
+    const uint8_t* pixels = static_cast<const uint8_t*>(job->image.pixels);
+    std::vector<uint8_t> webp = EncodeWebP(pixels, job->image.width, job->image.height,
+                                           job->image.stride, job->settings.webpQuality);
+    bool ok = false;
+    if (!webp.empty()) {
+        bool strict = _wcsicmp(job->settings.clipboardMode.c_str(), L"Strict") == 0;
+        bool imageOnly = _wcsicmp(job->settings.clipboardMode.c_str(), L"ImageOnly") == 0;
+
+        bool dropOk = false;
+        if (!imageOnly) {
+            HANDLE file = CreateFileW(job->dropPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (file != INVALID_HANDLE_VALUE) {
+                DWORD written = 0;
+                dropOk = WriteFile(file, webp.data(), static_cast<DWORD>(webp.size()), &written, nullptr) &&
+                         written == webp.size();
+                CloseHandle(file);
+                if (!dropOk) DeleteFileW(job->dropPath.c_str());
+            }
+            if (!dropOk) LogLine("pin: drop file write failed, publishing without CF_HDROP");
+        }
+
+        bool published = false;
+        AcquireSRWLockExclusive(&g_publishLock);
+        if (job->sequence < g_publishedSequence) {
+            LogLine("pin: copy superseded by a newer one");
+            ok = true;
+        } else {
+            ClipboardReport report = SetClipboardImage(nullptr, pixels, job->image.width, job->image.height,
+                                                       job->image.stride, webp, job->dropPath, !strict, !strict,
+                                                       dropOk);
+            LogFmt("pin: copy %s", report.Summary().c_str());
+            ok = report.ok;
+            if (ok) {
+                g_publishedSequence = job->sequence;
+                published = true;
+            }
+        }
+        ReleaseSRWLockExclusive(&g_publishLock);
+
+        if (published) {
+            // The clipboard now points at the new file, so the pin's previous one is garbage.
+            if (!job->previousDrop.empty()) DeleteFileW(job->previousDrop.c_str());
+        } else if (ok && dropOk) {
+            DeleteFileW(job->dropPath.c_str()); // superseded: never reached the clipboard
+        }
+    } else {
+        LogLine("pin: webp encode failed");
+    }
+    if (job->window != nullptr) PostMessageW(job->window, kCopyDone, ok ? 1 : 0, 0);
+    delete job;
+
+    if (--g_copiesInFlight == 0 && g_quitWhenIdle) PostThreadMessageW(g_uiThread, WM_QUIT, 0, 0);
 }
 
 void StartCopy(Pin& pin) {
@@ -318,34 +398,13 @@ void StartCopy(Pin& pin) {
     job->settings = pin.settings;
     job->window = pin.window;
     job->dropPath = UniqueFile(pin.paths.tempDir, L"Snip", L".webp");
+    job->previousDrop = pin.lastDrop;
+    job->sequence = ++g_nextSequence;
+    pin.lastDrop = job->dropPath;
     pin.busy = true;
 
-    std::thread([job]() {
-        const uint8_t* pixels = static_cast<const uint8_t*>(job->image.pixels);
-        std::vector<uint8_t> webp = EncodeWebP(pixels, job->image.width, job->image.height,
-                                               job->image.stride, job->settings.webpQuality);
-        bool ok = false;
-        if (!webp.empty()) {
-            HANDLE file = CreateFileW(job->dropPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                                      FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (file != INVALID_HANDLE_VALUE) {
-                DWORD written = 0;
-                WriteFile(file, webp.data(), static_cast<DWORD>(webp.size()), &written, nullptr);
-                CloseHandle(file);
-            }
-            bool strict = _wcsicmp(job->settings.clipboardMode.c_str(), L"Strict") == 0;
-            bool imageOnly = _wcsicmp(job->settings.clipboardMode.c_str(), L"ImageOnly") == 0;
-            ClipboardReport report = SetClipboardImage(nullptr, pixels, job->image.width, job->image.height,
-                                                       job->image.stride, webp, job->dropPath, !strict, !strict,
-                                                       !imageOnly);
-            LogFmt("pin: copy %s", report.Summary().c_str());
-            ok = report.ok;
-        } else {
-            LogLine("pin: webp encode failed");
-        }
-        if (job->window != nullptr) PostMessageW(job->window, kCopyDone, ok ? 1 : 0, 0);
-        delete job;
-    }).detach();
+    ++g_copiesInFlight;
+    std::thread(RunCopyJob, job).detach();
 }
 
 void ShowToast(Pin& pin, const std::wstring& text) {
@@ -438,6 +497,7 @@ void StartText(Pin& pin, POINT clientPoint) {
     SendMessageW(editor, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
 
     pin.editor = editor;
+    pin.editorFont = font;
     pin.editorProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(editor, GWLP_WNDPROC,
                                                                  reinterpret_cast<LONG_PTR>(EditProc)));
     SetWindowLongPtrW(editor, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&pin));
@@ -478,6 +538,10 @@ void FinishText(Pin& pin, bool commit) {
     HWND editor = pin.editor;
     pin.editor = nullptr;
     DestroyWindow(editor);
+    if (pin.editorFont != nullptr) {
+        DeleteObject(pin.editorFont);
+        pin.editorFont = nullptr;
+    }
     pin.committing = false;
     InvalidateRect(pin.window, nullptr, FALSE);
 }
@@ -764,8 +828,14 @@ void DrawRounded(Graphics& graphics, const RECT& box, float radius, ARGB fill, A
 void RenderPin(Pin& pin) {
     RECT client{};
     GetClientRect(pin.window, &client);
-    if (pin.back.width != client.right || pin.back.height != client.bottom) {
-        pin.back.Create(GetDC(pin.window), client.right, client.bottom);
+    // Grow with some slack (a resize drag would otherwise reallocate on every mouse move) and
+    // only shrink once the buffer is far too large.
+    const long long needed = static_cast<long long>(std::max<LONG>(1, client.right)) * std::max<LONG>(1, client.bottom);
+    if (pin.back.width < client.right || pin.back.height < client.bottom ||
+        static_cast<long long>(pin.back.width) * pin.back.height > needed * 4) {
+        HDC windowDc = GetDC(pin.window);
+        pin.back.Create(windowDc, client.right + 64, client.bottom + 64);
+        ReleaseDC(pin.window, windowDc);
     }
     if (pin.back.bitmap == nullptr) return;
 
@@ -887,7 +957,7 @@ void RenderPin(Pin& pin) {
         }
 
         // frame handles
-        for (int handle = 1; handle <= 8; ++handle) {
+        for (int handle = 1; handle <= 3; ++handle) {
             RECT box = HandleRect(pin, handle);
             SolidBrush fill(Color(255, 250, 250, 252));
             graphics.FillRectangle(&fill, RectF(static_cast<REAL>(box.left), static_cast<REAL>(box.top),
@@ -994,6 +1064,7 @@ void CropToNewPin(Pin& pin, RECT rect) {
 
     Settings settings = pin.settings;
     settings.pinOffset = 0;
+    settings.alwaysOnTop = pin.alwaysOnTop;
     settings.autoCopy = false; // the new pin stays off the clipboard until it is edited or copied
     CreatePin(std::move(fresh), settings, pin.paths, target);
 }
@@ -1405,8 +1476,20 @@ LRESULT CALLBACK PinProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
                     pin->hexEditor = nullptr;
                     DestroyWindow(editor);
                 }
+                if (pin->editorFont != nullptr) DeleteObject(pin->editorFont);
+                if (pin->hexFont != nullptr) DeleteObject(pin->hexFont);
+
+                // A stroke made while the previous copy was still encoding is waiting in
+                // pendingCopy; publish it now so closing the pin never loses the latest edit.
+                if (pin->pendingCopy) {
+                    pin->pendingCopy = false;
+                    pin->busy = false;
+                    pin->window = nullptr;
+                    StartCopy(*pin);
+                }
+
                 g_pins.erase(std::remove(g_pins.begin(), g_pins.end(), pin), g_pins.end());
-                if (g_pins.empty()) PostQuitMessage(0);
+                if (g_pins.empty()) QuitWhenIdle(); // waits for in-flight copies
                 delete pin;
             }
             return 0;
@@ -1427,6 +1510,8 @@ bool CreatePin(Document&& document, const Settings& settings, const Paths& paths
     pin->penWidth = std::clamp(settings.penWidth, 1, 24);
     pin->markerSize = std::clamp(settings.markerSize, 2, 60);
     pin->textSize = std::clamp(settings.textSize, 8, 72);
+    pin->alwaysOnTop = settings.alwaysOnTop;
+    g_uiThread = GetCurrentThreadId();
 
     HMONITOR targetMonitor = MonitorFromRect(&screenRect, MONITOR_DEFAULTTONEAREST);
     UINT dpiX = 96;
@@ -1467,7 +1552,8 @@ bool CreatePin(Document&& document, const Settings& settings, const Paths& paths
         return false;
     }
 
-    HWND window = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, L"SniPin.Pin", L"SniPin",
+    DWORD exStyle = WS_EX_TOOLWINDOW | (pin->alwaysOnTop ? WS_EX_TOPMOST : 0);
+    HWND window = CreateWindowExW(exStyle, L"SniPin.Pin", L"SniPin",
                                   WS_POPUP, x, y, clientWidth, clientHeight, nullptr, nullptr,
                                   windowClass.hInstance, pin);
     if (window == nullptr) {
@@ -1487,6 +1573,7 @@ bool CreatePin(Document&& document, const Settings& settings, const Paths& paths
                                  OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                  DEFAULT_PITCH | FF_DONTCARE, L"Consolas");
         SendMessageW(hex, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        pin->hexFont = font;
         pin->hexEditor = hex;
         pin->hexProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(hex, GWLP_WNDPROC,
                                                                    reinterpret_cast<LONG_PTR>(HexProc)));

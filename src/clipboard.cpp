@@ -75,9 +75,31 @@ std::wstring FormatName(uint32_t format) {
     return L"CF_" + std::to_wstring(format);
 }
 
+// Only formats this app writes as HGLOBALs. CF_DIBV5 is left out on purpose: asking for it makes
+// Windows synthesize a second full-size bitmap just so the log can print its size.
 bool IsGlobalFormat(uint32_t format) {
-    return format == CF_HDROP || format == CF_DIB || format == CF_DIBV5 || format >= 0xC000;
+    return format == CF_HDROP || format == CF_DIB || format >= 0xC000;
 }
+
+// OpenClipboard(nullptr) followed by EmptyClipboard leaves the clipboard without an owner, which
+// the documentation says makes SetClipboardData fail. A message-only window on the calling thread
+// gives it a real owner; the data stays on the clipboard after the window is destroyed.
+class ClipboardOwner {
+public:
+    ClipboardOwner() {
+        window_ = CreateWindowExW(0, L"STATIC", L"SniPin.ClipboardOwner", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                                  nullptr, GetModuleHandleW(nullptr), nullptr);
+    }
+    ~ClipboardOwner() {
+        if (window_ != nullptr) DestroyWindow(window_);
+    }
+    ClipboardOwner(const ClipboardOwner&) = delete;
+    ClipboardOwner& operator=(const ClipboardOwner&) = delete;
+    HWND get() const { return window_; }
+
+private:
+    HWND window_ = nullptr;
+};
 
 bool SetBytes(uint32_t format, const std::vector<uint8_t>& bytes) {
     HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes.size());
@@ -145,6 +167,9 @@ ClipboardReport SetClipboardImage(HWND owner, const uint8_t* bgra, int width, in
         report.error = "no drop path";
         return report;
     }
+
+    ClipboardOwner temporaryOwner;
+    if (owner == nullptr) owner = temporaryOwner.get();
 
     if (!OpenWithRetry(owner)) {
         report.error = "OpenClipboard failed";
